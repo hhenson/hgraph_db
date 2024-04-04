@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "hgraph-db"
+version = "0.1.0"
+description = ""
+authors = ["Howard Henson <howard@henson.me.uk>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.11"
+hgraph = ">=0.2.6"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
