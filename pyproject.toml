@@ -11,7 +11,16 @@ hgraph = ">=0.2.7"
 sqlalchemy = ">=2.0.29"
 polars = ">=0.20.18"
 
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.dev-dependencies]
+pytest = ">=8.1.1"
+
+[tool.pytest.ini-options]
+minversion = "8.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
