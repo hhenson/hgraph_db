@@ -5,12 +5,12 @@ from itertools import chain
 from typing import Iterator, TypeVar, Optional, OrderedDict, Callable, Any
 
 import polars as pl
-from hgraph import TSB, TS_SCHEMA, generator, ts_schema, HgTimeSeriesTypeMetaData, TS
+from hgraph import TS_SCHEMA, ts_schema, HgTimeSeriesTypeMetaData, TS
 from polars.datatypes.classes import FloatType, IntegerType, String, Boolean, Date, Datetime, Time, Duration, \
     Categorical, Array, Object, List
 
 __all__ = (
-    'DataFrameSource', 'DataStore', 'DATA_FRAME_SOURCE', 'data_frame_source', 'DataConnectionStore',
+    'DataFrameSource', 'DataStore', 'DATA_FRAME_SOURCE', 'DataConnectionStore',
     'SqlDataFrameSource', 'PolarsDataFrameSource',
 )
 
@@ -147,23 +147,6 @@ def _converter(dt_tp: pl.DataType) -> Callable[[date | datetime], datetime]:
     if isinstance(dt_tp, pl.datatypes.Datetime):
         return lambda dt: dt
     raise RuntimeError(f"Unable to convert {dt_tp} to a date or datetime")
-
-
-@generator(resolvers={TS_SCHEMA: _extract_schema})
-def data_frame_source(
-        dfs: type[DATA_FRAME_SOURCE], dt_col: str, offset: timedelta = timedelta()
-) -> TSB[TS_SCHEMA]:
-    """
-    Iterates over the data_frame, returning an instance of TS_SCHEMA for each row in the table.
-    null values are not ticked.
-    """
-    df: pl.DataFrame
-    dfs_instance = DataStore.instance().get_data_source(dfs)
-    dt_converter = _converter(dfs_instance.schema[dt_col])
-    for df in dfs_instance.iter_frames():
-        for value in df.iter_rows(named=True):
-            dt = dt_converter(value.pop(dt_col))
-            yield dt + offset, value
 
 
 class PolarsDataFrameSource(DataFrameSource):

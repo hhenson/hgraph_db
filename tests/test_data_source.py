@@ -3,8 +3,9 @@ from datetime import date, datetime
 import polars as pl
 from hgraph import GraphConfiguration, evaluate_graph, graph, TSB, ts_schema, TS
 
-from hgraph_db.data_source import PolarsDataFrameSource, data_frame_source, SqlDataFrameSource, DataConnectionStore, \
+from hgraph_db.data_source import PolarsDataFrameSource, SqlDataFrameSource, DataConnectionStore, \
     DataStore
+from hgraph_db.data_source_generators import data_frame_source
 
 
 class MockDataSource(PolarsDataFrameSource):
@@ -23,8 +24,10 @@ def test_data_source():
     def main() -> TSB[ts_schema(name=TS[str], age=TS[int])]:
         return data_frame_source(MockDataSource, "date")
 
-    config = GraphConfiguration()
-    result = evaluate_graph(main, config)
+    with DataStore() as store:
+        config = GraphConfiguration()
+        result = evaluate_graph(main, config)
+
     assert result == [
         (datetime(2020, 1, 1), {'name': 'John', 'age': 25}),
         (datetime(2020, 1, 2), {'name': 'Alice', 'age': 30}),
