@@ -10,6 +10,8 @@ python = ">=3.11"
 hgraph = ">=0.2.7"
 sqlalchemy = ">=2.0.29"
 polars = ">=0.20.18"
+duckdb = ">=0.10.1"
+pyarrow = ">=15.0.2"
 
 [build-system]
 requires = ["poetry-core"]

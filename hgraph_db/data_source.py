@@ -1,13 +1,18 @@
 from abc import abstractmethod, ABC
 from datetime import date, datetime, time, timedelta
-from typing import Iterator, TypeVar, Optional, OrderedDict, Callable
+from functools import cached_property
+from itertools import chain
+from typing import Iterator, TypeVar, Optional, OrderedDict, Callable, Any
 
 import polars as pl
 from hgraph import TSB, TS_SCHEMA, generator, ts_schema, HgTimeSeriesTypeMetaData, TS
 from polars.datatypes.classes import FloatType, IntegerType, String, Boolean, Date, Datetime, Time, Duration, \
     Categorical, Array, Object, List
 
-__all__ = ('DataFrameSource', 'DataStore', 'DATA_FRAME_SOURCE', 'data_frame_source')
+__all__ = (
+    'DataFrameSource', 'DataStore', 'DATA_FRAME_SOURCE', 'data_frame_source', 'DataConnectionStore',
+    'SqlDataFrameSource', 'PolarsDataFrameSource',
+)
 
 
 class DataFrameSource(ABC):
@@ -90,6 +95,13 @@ class DataStore:
             self._data_frame_sources[dfs] = dfs_instance
         return dfs_instance
 
+    def __enter__(self):
+        self.register_instance()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release_instance()
+
 
 def _extract_schema(mapping, scalars) -> TS_SCHEMA:
     """Extract the schema from the mapping"""
@@ -129,9 +141,6 @@ def _convert_type(pl_type: pl.DataType) -> HgTimeSeriesTypeMetaData:
     raise ValueError(f"Unable to convert {pl_type} to HgTimeSeriesTypeMetaData")
 
 
-DT_COL_INDEX = TypeVar("DT_COL_INDEX", bound=int)
-
-
 def _converter(dt_tp: pl.DataType) -> Callable[[date | datetime], datetime]:
     if isinstance(dt_tp, pl.datatypes.Date):
         return lambda dt: datetime.combine(dt, time())
@@ -168,3 +177,97 @@ class PolarsDataFrameSource(DataFrameSource):
     @property
     def data_frame(self) -> DATA_FRAME_SOURCE:
         return self._df
+
+
+class DataConnectionStore:
+    _instance: Optional["DataConnectionStore"] = None
+
+    def __init__(self):
+        self._connections: dict[str, Any] = {}
+
+    def register_instance(self):
+        if DataConnectionStore._instance is None:
+            DataConnectionStore._instance = self
+        else:
+            raise RuntimeError("DataConnectionStore already registered")
+
+    @staticmethod
+    def release_instance():
+        DataConnectionStore._instance = None
+
+    @staticmethod
+    def instance() -> "DataConnectionStore":
+        if DataConnectionStore._instance is None:
+            DataConnectionStore().register_instance()
+        return DataConnectionStore._instance
+
+    def get_connection(self, name: str) -> Any:
+        connection = self._connections.get(name)
+        if connection is None:
+            raise ValueError(f"No connection found with name '{name}'")
+        return connection
+
+    def set_connection(self, name: str, connection):
+        self._connections[name] = connection
+
+    def __enter__(self):
+        self.register_instance()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release_instance()
+
+
+class SqlDataFrameSource(DataFrameSource):
+    """
+    See https://docs.pola.rs/py-polars/html/reference/api/polars.read_database.html for more info.
+    This uses the query connection and batch_size properties. Any execute_options can be provided as kwargs.
+    """
+
+    def __init__(self, query: str, connection: str, batch_size: int = 1000, **kwargs):
+        self._query: str = query
+        self._kwargs: dict = kwargs
+        self._connection: str = connection
+        self._batch_size: int = batch_size
+        self._df: DATA_FRAME_SOURCE | None = None
+        self._iter: Iterator[DATA_FRAME_SOURCE] | None = None
+
+    @property
+    def connection(self):
+        return DataConnectionStore.instance().get_connection(self._connection)
+
+    @property
+    def data_frame(self) -> pl.DataFrame:
+        if self._df is None or self._iter is not None:
+            self._iter = None
+            self._df = pl.read_database(
+                self._query,
+                self.connection,
+                **self._kwargs
+            )
+        return self._df
+
+    def iter_frames(self) -> Iterator[pl.DataFrame]:
+        if self._df is None:
+            return pl.read_database(
+                self._query,
+                self.connection,
+                iter_batches=True,
+                batch_size=self._batch_size,
+                execute_options=self._kwargs
+            )
+        elif self._iter is not None:
+            # We probably loaded this via the schema method, clean up and return.
+            i = chain([self._df], self._iter)
+            self._df = None
+            self._iter = None
+            return i
+        else:
+            # Since we already have the data loaded, just use the loaded data-frame
+            return iter([self._df])
+
+    @cached_property
+    def schema(self) -> OrderedDict[str, pl.DataType]:
+        self._iter = self.iter_frames()
+        self._df = next(self._iter)
+        return self._df.schema
