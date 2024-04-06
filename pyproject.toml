@@ -7,7 +7,9 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.11"
-hgraph = ">=0.2.6"
+hgraph = ">=0.2.7"
+sqlalchemy = ">=2.0.29"
+polars = ">=0.20.18"
 
 
 [build-system]
