@@ -1,13 +1,9 @@
 from abc import abstractmethod, ABC
-from datetime import date, datetime, time, timedelta
 from functools import cached_property
 from itertools import chain
-from typing import Iterator, TypeVar, Optional, OrderedDict, Callable, Any
+from typing import Iterator, TypeVar, Optional, OrderedDict, Any
 
 import polars as pl
-from hgraph import TS_SCHEMA, ts_schema, HgTimeSeriesTypeMetaData, TS
-from polars.datatypes.classes import FloatType, IntegerType, String, Boolean, Date, Datetime, Time, Duration, \
-    Categorical, Array, Object, List
 
 __all__ = (
     'DataFrameSource', 'DataStore', 'DATA_FRAME_SOURCE', 'DataConnectionStore',
@@ -101,52 +97,6 @@ class DataStore:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.release_instance()
-
-
-def _extract_schema(mapping, scalars) -> TS_SCHEMA:
-    """Extract the schema from the mapping"""
-    dfs: type[DATA_FRAME_SOURCE] = mapping[DATA_FRAME_SOURCE].py_type
-    dfs_instance = DataStore.instance().get_data_source(dfs)
-    dt_col = scalars["dt_col"]
-    schema = dfs_instance.schema
-    return ts_schema(**{k: _convert_type(v) for k, v in schema.items() if k != dt_col})
-
-
-def _convert_type(pl_type: pl.DataType) -> HgTimeSeriesTypeMetaData:
-    if isinstance(pl_type, IntegerType):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[int])
-    if isinstance(pl_type, FloatType):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[float])
-    if isinstance(pl_type, String):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[str])
-    if isinstance(pl_type, Boolean):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[bool])
-    if isinstance(pl_type, Date):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[date])
-    if isinstance(pl_type, Datetime):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[datetime])
-    if isinstance(pl_type, Time):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[time])
-    if isinstance(pl_type, Duration):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[timedelta])
-    if isinstance(pl_type, Categorical):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[str])
-    if isinstance(pl_type, (List, Array)):
-        tp: List = pl_type
-        return HgTimeSeriesTypeMetaData.parse_type(TS[_convert_type(tp.inner).py_type])
-    if isinstance(pl_type, Object):
-        return HgTimeSeriesTypeMetaData.parse_type(TS[object])
-    # Do Struct, still
-
-    raise ValueError(f"Unable to convert {pl_type} to HgTimeSeriesTypeMetaData")
-
-
-def _converter(dt_tp: pl.DataType) -> Callable[[date | datetime], datetime]:
-    if isinstance(dt_tp, pl.datatypes.Date):
-        return lambda dt: datetime.combine(dt, time())
-    if isinstance(dt_tp, pl.datatypes.Datetime):
-        return lambda dt: dt
-    raise RuntimeError(f"Unable to convert {dt_tp} to a date or datetime")
 
 
 class PolarsDataFrameSource(DataFrameSource):

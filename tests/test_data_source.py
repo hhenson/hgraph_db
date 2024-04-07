@@ -5,7 +5,7 @@ from hgraph import GraphConfiguration, evaluate_graph, graph, TSB, ts_schema, TS
 
 from hgraph_db.data_source import PolarsDataFrameSource, SqlDataFrameSource, DataConnectionStore, \
     DataStore
-from hgraph_db.data_source_generators import data_frame_source
+from hgraph_db.data_source_generators import tsb_from_data_source
 
 
 class MockDataSource(PolarsDataFrameSource):
@@ -22,7 +22,7 @@ class MockDataSource(PolarsDataFrameSource):
 def test_data_source():
     @graph
     def main() -> TSB[ts_schema(name=TS[str], age=TS[int])]:
-        return data_frame_source(MockDataSource, "date")
+        return tsb_from_data_source(MockDataSource, "date")
 
     with DataStore() as store:
         config = GraphConfiguration()
@@ -67,7 +67,7 @@ def test_db_source():
 
     @graph
     def main() -> TSB[ts_schema(name=TS[str], age=TS[int])]:
-        return data_frame_source(AgeDataSource, "date")
+        return tsb_from_data_source(AgeDataSource, "date")
 
     with DataConnectionStore() as dsc, DataStore():
         dsc.set_connection("duckdb", conn)
